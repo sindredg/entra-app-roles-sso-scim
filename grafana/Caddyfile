@@ -1,0 +1,13 @@
+# Caddy: automatic HTTPS (Let's Encrypt) + reverse proxy.
+# GRAFANA_DOMAIN comes from the container environment (.env).
+
+{$GRAFANA_DOMAIN} {
+	encode gzip
+
+	# SCIM endpoint (strips /scim prefix; bridge sees /Users, /ServiceProviderConfig)
+	handle_path /scim/* {
+		reverse_proxy scim-bridge:8080
+	}
+
+	reverse_proxy grafana:3000
+}

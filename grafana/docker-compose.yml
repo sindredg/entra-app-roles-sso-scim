@@ -1,0 +1,67 @@
+# Grafana OSS + Caddy (automatic HTTPS).
+# All secrets/identifiers come from .env (gitignored) - see .env.example.
+# Phase 2 enables the [auth.azuread] block via AZUREAD_SSO_ENABLED=true.
+
+services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      # --- server ---
+      GF_SERVER_ROOT_URL: "https://${GRAFANA_DOMAIN}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"        # local break-glass admin
+      # --- Entra ID OIDC (Phase 2) ---
+      GF_AUTH_AZUREAD_ENABLED: "${AZUREAD_SSO_ENABLED:-false}"
+      GF_AUTH_AZUREAD_NAME: "Microsoft Entra ID"
+      GF_AUTH_AZUREAD_CLIENT_AUTHENTICATION: "client_secret_post"
+      GF_AUTH_AZUREAD_CLIENT_ID: "${AZUREAD_CLIENT_ID:-}"
+      GF_AUTH_AZUREAD_CLIENT_SECRET: "${AZUREAD_CLIENT_SECRET:-}"
+      GF_AUTH_AZUREAD_SCOPES: "openid email profile"
+      GF_AUTH_AZUREAD_AUTH_URL: "https://login.microsoftonline.com/${AZUREAD_TENANT_ID:-common}/oauth2/v2.0/authorize"
+      GF_AUTH_AZUREAD_TOKEN_URL: "https://login.microsoftonline.com/${AZUREAD_TENANT_ID:-common}/oauth2/v2.0/token"
+      GF_AUTH_AZUREAD_ALLOWED_ORGANIZATIONS: "${AZUREAD_TENANT_ID:-}"
+      GF_AUTH_AZUREAD_ALLOW_SIGN_UP: "true"          # JIT-create users on first SSO login
+      GF_AUTH_AZUREAD_AUTO_LOGIN: "false"            # keep the login page (break-glass access)
+      GF_AUTH_AZUREAD_ROLE_ATTRIBUTE_STRICT: "true"  # no roles claim -> deny, don't default to Viewer
+      GF_AUTH_AZUREAD_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
+      GF_AUTH_AZUREAD_SKIP_ORG_ROLE_SYNC: "false"    # re-evaluate role from token at each login
+      GF_AUTH_AZUREAD_USE_PKCE: "true"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks: [web]
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"     # ACME HTTP-01 + redirect to HTTPS
+      - "443:443"
+    environment:
+      GRAFANA_DOMAIN: "${GRAFANA_DOMAIN}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data          # certificates - persist across restarts
+      - caddy-config:/config
+    networks: [web]
+
+  # SCIM bridge (Entra provisioning -> Grafana admin API)
+  scim-bridge:
+    build: ../scim-bridge
+    container_name: scim-bridge
+    restart: unless-stopped
+    environment:
+      SCIM_SECRET_TOKEN: "${SCIM_SECRET_TOKEN}"
+      GRAFANA_URL: "http://grafana:3000"
+      GRAFANA_ADMIN_USER: "admin"
+      GRAFANA_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+    networks: [web]               # no published ports - reachable only via Caddy /scim/*
+
+volumes:
+  grafana-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  web:
