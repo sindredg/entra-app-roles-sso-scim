@@ -1,0 +1,18 @@
+# secrets / runtime
+.env
+*.env
+!*.env.example
+!.env.example
+*.jwt
+*.pem
+*.key
+
+# local junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# OneDrive / Office save artifacts (the repo lives in a synced folder)
+*.tmp
+*.TMP
+*~RF*
