@@ -1,6 +1,6 @@
 # 90 - Lab journal
 
-Chronological record of what was actually done, in the order it happened, including detours and dead ends. The numbered phase documents (01–03) describe the clean path; this journal is the honest one. Symptom→cause→fix details for each incident live in [99-troubleshooting.md](99-troubleshooting.md).
+What was actually done, in the order it happened, including detours and dead ends. The phase documents (01-03) describe the clean path. Symptom, cause and fix for each incident live in [99-troubleshooting.md](99-troubleshooting.md).
 
 ## Phase 0 - Decisions
 
@@ -42,5 +42,4 @@ Chronological record of what was actually done, in the order it happened, includ
 8. **Groups appeared in the logs** with action "Create" despite group provisioning being disabled - detail pane showed import-for-scope-expansion then `EntrySynchronizationSkip / EntityTypeNotSupported`. Groups drive scope, not payload; the list-view Action column shows the incoming change, not the outcome.
 9. **Lifecycle tests, all via Provision on demand**: rename (Nils New → Nils Worker) synced; group removal → account **disabled** in Grafana; re-add → re-enabled (same target ID, no duplicate); new hire Adam Analyst provisioned; tenant-level `AccountEnabled:$false` → evaluated as soft-delete, and because the target was already disabled, Entra **skipped the duplicate operation** - deprovisioning is idempotent across triggers.
 
-
-The project concludes with phases 1 to 3: infrastructure, SSO, and SCIM provisioning. That is the full account lifecycle for a self-hosted application, working, with the Phase 1 and Phase 3 evidence captured and the Phase 2 evidence still outstanding (see item 8 above).
+Phases 1 to 3 cover the full account lifecycle for a self-hosted application, working, with Phase 1 and Phase 3 evidence captured and three Phase 2 captures outstanding (item 8 above).

@@ -18,20 +18,19 @@ could take to mean the setting was turned off. It was not, and the two paths coe
 
 ## Consequences
 
-The reason it is safe is structural rather than incidental. JIT creation here cannot produce an account
-for someone who was not already authorized: reaching Grafana at all requires a token, which requires
-assignment on the SSO app where assignment is required, and `role_attribute_strict = true` then denies
-any token without a valid `roles` claim. So the setting can create an account earlier than SCIM would
-have, but not for anyone SCIM would have refused.
+**Safe structurally, not incidentally.** JIT creation cannot produce an account for someone not already
+authorized: reaching Grafana requires a token, which requires assignment on the SSO app where assignment
+is required, and `role_attribute_strict = true` then denies any token without a valid `roles` claim. The
+setting can create an account earlier than SCIM would have, but not for anyone SCIM would have refused.
 
-In the as-built configuration the two paths also converge, because the same three `grafana-*` groups gate
-the SSO app and define provisioning scope. A user who signs in and gets a JIT account is by definition
-inside provisioning scope, so SCIM picks them up and will disable them when membership ends.
+The two paths also converge, because the same three `grafana-*` groups gate the SSO app and define
+provisioning scope. A user who gets a JIT account is by definition inside provisioning scope, so SCIM
+picks them up and disables them when membership ends.
 
-The practical consequence is narrow: an account can exist slightly before its first provisioning cycle
-touches it, and "every Grafana account was created by SCIM" is not literally true. Neither costs anything
-in this configuration. It would start to matter if the two apps were ever assigned different groups, which
-is the constraint recorded in [ADR 0003](0003-separate-provisioning-service-principal.md).
+**The practical consequence is narrow:** an account can exist slightly before its first provisioning
+cycle touches it, and "every Grafana account was created by SCIM" is not literally true. Neither costs
+anything here. It would matter if the two apps were ever assigned different groups, the constraint
+recorded in [ADR 0003](0003-separate-provisioning-service-principal.md).
 
 ## When we would revisit
 

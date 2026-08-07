@@ -1,6 +1,6 @@
 # 00 - Architecture
 
-This document is the reference model for the whole lab: components, networking, identities, the Entra object model, token flow, provisioning flow, and the permissions required to build each piece.
+Reference model for the lab: components, networking, identities, the Entra object model, token flow, provisioning flow, and the permissions needed to build each piece.
 
 ## 1. Component overview
 
@@ -34,10 +34,10 @@ flowchart LR
     G1 & G2 & G3 -.->|assigned to app roles| SP
 ```
 
-Two planes to keep separate mentally:
+Two planes, kept separate throughout:
 
-- **Runtime (authentication) plane** - a user opens Grafana, is redirected to Entra, authenticates, and returns with tokens. Grafana creates/updates the session and derives the org role from the token. This happens at every login.
-- **Provisioning (management) plane** - the Entra provisioning service pushes account lifecycle events (create, update, disable) to the app's SCIM endpoint on a cycle Microsoft documents as approximately 40 minutes ([Microsoft Learn](https://learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)). This happens whether or not the user ever logs in, and is what guarantees *deprovisioning*. SSO alone only stops future logins; it does not remove the account.
+- **Runtime (authentication) plane.** A user opens Grafana, is redirected to Entra, authenticates, and returns with tokens. Grafana creates or updates the session and derives the org role from the token. Happens at every login.
+- **Provisioning (management) plane.** The Entra provisioning service pushes account lifecycle events (create, update, disable) to the SCIM endpoint on a cycle Microsoft documents as approximately 40 minutes ([Microsoft Learn](https://learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)). Happens whether or not the user ever logs in, and is what guarantees *deprovisioning*. SSO alone only stops future logins.
 
 ## 2. Azure infrastructure and networking
 
@@ -62,7 +62,7 @@ Network flows (all TCP):
 
 Container-internal traffic (`caddy → grafana:3000`, `scim-bridge → grafana:3000`) stays on the Docker bridge network; Grafana's port 3000 is never exposed on the host. TLS terminates at Caddy.
 
-Why a public endpoint at all: both browser-based OIDC redirects and the Entra provisioning service originate outside the VM. Provisioning in particular has no agent option for SCIM - Entra's cloud service must reach the endpoint over public HTTPS with a valid certificate.
+**Why a public endpoint at all:** browser-based OIDC redirects and the Entra provisioning service both originate outside the VM, and provisioning has no agent option for SCIM. Entra's cloud service must reach the endpoint over public HTTPS with a valid certificate.
 
 ## 3. Identity model
 
@@ -78,13 +78,11 @@ Why a public endpoint at all: both browser-based OIDC redirects and the Entra pr
 
 Design notes:
 
-- **Groups are the unit of assignment**, never individual users. Users get Grafana access exclusively through group membership; membership drives both the app role (SSO) and the provisioning scope (SCIM). One control point for the whole lifecycle.
-- Users must be **direct** members. Entra does not expand nested groups when resolving app role assignments, and Microsoft lists this as unsupported "for both access and provisioning", so it constrains SCIM scope here as well as the role mapping ([Entra service limits](https://learn.microsoft.com/entra/identity/users/directory-service-limits-restrictions)). A platform limitation rather than a design choice, and a classic lab trap.
-- The local Grafana `admin` account remains the documented break-glass path in case SSO misconfiguration locks everyone out.
+- **Groups are the unit of assignment**, never individual users. Membership drives both the app role (SSO) and the provisioning scope (SCIM), so it is one control point for the whole lifecycle.
+- Users must be **direct** members. Entra does not expand nested groups when resolving app role assignments, and Microsoft lists this as unsupported "for both access and provisioning", so it constrains SCIM scope as well as the role mapping ([Entra service limits](https://learn.microsoft.com/entra/identity/users/directory-service-limits-restrictions)). A platform limitation rather than a design choice.
+- The local Grafana `admin` account remains the documented break-glass path if an SSO misconfiguration locks everyone out.
 
 ## 4. Entra object model: app registration vs. enterprise application
-
-The single most-tested distinction in this space:
 
 | | App registration (`application` object) | Enterprise application (`servicePrincipal` object) |
 |---|---|---|
@@ -150,12 +148,12 @@ Claims Grafana consumes (ID token, `v2.0` issuer):
 }
 ```
 
-Points worth internalizing:
+Four things that follow from this:
 
-- **App roles carry no permissions.** On the Entra side the three roles are just labeled strings; Entra only decides which string enters each user's `roles` claim. What `Admin`, `Editor`, and `Viewer` are *allowed to do* is defined and enforced entirely by Grafana's built-in org-role RBAC. Nothing per-role was configured in this lab on either side. This is the standard division of labor in SSO: **the IdP handles authentication and role assignment; the application handles permission enforcement.** (Contrast with a custom-built API, where the developer defines in code what each role value means.)
-- The `roles` claim appears **only if** the user (directly or via group) is assigned to at least one app role on the service principal ([Microsoft Learn](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps)). No assignment → no claim → with `role_attribute_strict = true`, login denied. Worth noting that Grafana's default for that setting is `false` ([Grafana docs](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/entraid/)), so this is a deliberate departure from the default that makes authorization failures loud instead of silently defaulting everyone to Viewer.
-- **App roles vs. groups claim:** the alternative design emits group object IDs (`groups` claim) and maps them in the app. That breaks past 200 groups for JWT, and 150 for SAML, where the claim is replaced by an overage indication and the app must call Microsoft Graph instead ([Microsoft Learn](https://learn.microsoft.com/security/zero-trust/develop/configure-tokens-group-claims-app-roles#group-overages)). It also leaks directory structure to the app and couples app config to tenant-specific GUIDs. App roles put a stable, app-defined vocabulary in the token. Same reasoning as from a previous custom API lab, now applied from the admin side.
-- Grafana re-evaluates the role at **every login** (`skip_org_role_sync = false`): demote a user by moving groups and the change lands on their next sign-in, but not before. The mid-session and never-logs-in-again cases are what Phase 3 (SCIM) covers.
+- **App roles carry no permissions.** On the Entra side the three roles are labeled strings, and Entra only decides which string enters each user's `roles` claim. What `Admin`, `Editor` and `Viewer` are *allowed to do* is defined and enforced entirely by Grafana's built-in org-role RBAC. That is the standard division of labour: the IdP handles authentication and role assignment, the application handles permission enforcement.
+- The `roles` claim appears **only if** the user, directly or via group, is assigned to at least one app role on the service principal ([Microsoft Learn](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps)). No assignment → no claim → with `role_attribute_strict = true`, login denied. Grafana's default for that setting is `false` ([Grafana docs](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/entraid/)), so this is a deliberate departure that makes authorization failures loud rather than silently landing everyone on Viewer.
+- **App roles vs. the groups claim.** The alternative emits group object IDs and maps them in the app. That breaks past 200 groups for JWT and 150 for SAML, where the claim is replaced by an overage indication and the app must call Graph instead ([Microsoft Learn](https://learn.microsoft.com/security/zero-trust/develop/configure-tokens-group-claims-app-roles#group-overages)). It also leaks directory structure to the app and couples app config to tenant-specific GUIDs.
+- Grafana re-evaluates the role at **every login** (`skip_org_role_sync = false`), so demoting a user by moving groups lands on their next sign-in and not before. The mid-session and never-logs-in-again cases are what Phase 3 covers.
 
 ## 6. Provisioning architecture (Phase 3)
 
@@ -166,15 +164,15 @@ flowchart LR
     GW -->|"Grafana admin API<br/>(basic auth, local admin)"| GRAF[Grafana]
 ```
 
-- The Entra provisioning service is agentless: configured on the enterprise application with a **Tenant URL** (`https://<GRAFANA_FQDN>/scim`) and a **secret token**, it runs an initial sync then incremental cycles, documented at approximately every 40 minutes and not configurable ([Microsoft Learn](https://learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)). Microsoft also publishes the IP ranges the provisioning service operates from, which is the hook for restricting the endpoint in production ([IP ranges](https://learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups#ip-ranges)).
-- **Scope = assigned users and groups**: the same three groups drive provisioning, so assignment, role, and account lifecycle all hang off one membership operation.
-- Lifecycle mapping: user added to group → SCIM `POST /Users` (account created before first login - no JIT dependency); attribute change → `PATCH`; user removed from group / disabled / deleted → `PATCH active=false` (soft delete), which the gateway maps to disabling the Grafana account.
-- The gateway exists because self-hosted Grafana exposes SCIM natively only under an Enterprise license. Entra's configuration, attribute mappings, scoping and monitoring are identical either way - the Entra-side skills transfer 1:1.
-- The gateway holds a Grafana admin credential; it listens only on the Docker network, and the SCIM endpoint requires the bearer token. Both secrets live in `.env`. That bearer token is consequently the only thing between the public internet and account administration, which is the reason the bridge implements no destructive operation at all ([ADR 0001](adr/0001-soft-delete-over-hard-delete.md)) and is discussed further in the [risk note](risk-and-limitations.md#the-bearer-token-is-the-only-thing-in-front-of-account-administration).
+- The provisioning service is agentless. Configured on the enterprise application with a **Tenant URL** (`https://<GRAFANA_FQDN>/scim`) and a **secret token**, it runs an initial sync then incremental cycles at approximately 40 minutes, not configurable ([Microsoft Learn](https://learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)). Microsoft publishes the IP ranges it operates from, which is the hook for restricting the endpoint in production ([IP ranges](https://learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups#ip-ranges)).
+- **Scope = assigned users and groups.** The same three groups drive provisioning, so assignment, role and account lifecycle all hang off one membership operation.
+- Lifecycle mapping: added to group → `POST /Users` (account created before first login, no JIT dependency); attribute change → `PATCH`; removed from group, disabled or deleted → `PATCH active=false`, which the bridge maps to disabling the Grafana account.
+- The bridge exists because self-hosted Grafana exposes SCIM natively only under Enterprise. Entra's configuration, attribute mappings, scoping and monitoring are identical either way.
+- The bridge holds a Grafana admin credential, listens only on the Docker network, and requires the bearer token on every request. Both secrets live in `.env`. That token is the only thing between the public internet and account administration, which is why the bridge implements no destructive operation at all ([ADR 0001](adr/0001-soft-delete-over-hard-delete.md)).
 
 ## 7. Permissions needed to build the lab
 
-Least-privilege mapping (what each phase actually requires, vs. running everything as Global Administrator):
+What each phase actually requires, rather than running everything as Global Administrator:
 
 | Phase | Entra role / Azure RBAC | Used for |
 |---|---|---|

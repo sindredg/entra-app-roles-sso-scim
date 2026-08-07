@@ -18,20 +18,25 @@ SCIM (System for Cross-domain Identity Management) is the standard REST and JSON
 
 ## The Grafana licensing constraint, and the chosen design
 
-Grafana's native SCIM provisioning is available in Grafana Enterprise and Grafana Cloud, and the same
-documentation notes that it "only works with SAML authentication" ([Configure SCIM provisioning](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-scim-provisioning/),
-checked July 2026). This lab runs Grafana OSS and authenticates over OIDC, since SAML is also an
-Enterprise feature, so there is no native SCIM path available here at any licence tier. To keep the lab
-free while still exercising the **real Entra provisioning engine against a real SCIM 2.0 endpoint**, a
-small bridge container translates SCIM calls into Grafana admin API calls:
+Grafana's native SCIM provisioning is Enterprise and Cloud only, and the same documentation notes it
+"only works with SAML authentication" ([Configure SCIM provisioning](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-scim-provisioning/),
+checked July 2026). This lab runs Grafana OSS over OIDC, since SAML is also Enterprise, so **there is
+no native SCIM path here at any licence tier.** To exercise the real Entra provisioning engine against
+a real SCIM 2.0 endpoint, a small bridge container translates SCIM calls into Grafana admin API calls:
 
 ```
 Entra provisioning service ──SCIM 2.0/HTTPS──► Caddy /scim/* ──► scim-bridge ──Grafana admin API──► Grafana
 ```
 
-Everything on the Entra side - enterprise app provisioning config, attribute mappings, scoping, provisioning logs - is exactly what it would be against a natively SCIM-capable app (and is what SC-300 examines). The bridge is the app-side adapter, equivalent to what Grafana Enterprise ships built-in. Honest trade-off, stated plainly: production would use the vendor's native endpoint, and the bridge is a lab substitute that we own and must maintain.
+Everything on the Entra side (provisioning config, attribute mappings, scoping, provisioning logs) is
+exactly what it would be against a natively SCIM-capable app. The bridge is the app-side adapter,
+equivalent to what Grafana Enterprise ships built-in. The trade-off: production would use the vendor's
+native endpoint, and this is a lab substitute we own and must maintain.
 
-Implementation: a purpose-built bridge ([`scim-bridge/app.py`](../scim-bridge/app.py), ~200 lines of Python/Flask) rather than a gateway framework - no ready-made Grafana plugin exists for any of them, and a single readable file that implements exactly the SCIM subset Entra uses is itself documentation of the protocol. The trade-off we accepted by writing it ourselves is recorded in [ADR 0002](adr/0002-custom-scim-bridge.md). Operation mapping:
+Implementation is a purpose-built bridge ([`scim-bridge/app.py`](../scim-bridge/app.py), ~200 lines of
+Python/Flask) rather than a gateway framework, since no ready-made Grafana plugin exists for any of
+them and a single readable file implementing exactly the SCIM subset Entra uses doubles as protocol
+documentation. Reasoning in [ADR 0002](adr/0002-custom-scim-bridge.md). Operation mapping:
 
 | SCIM operation | Grafana admin API |
 |---|---|
@@ -41,22 +46,25 @@ Implementation: a purpose-built bridge ([`scim-bridge/app.py`](../scim-bridge/ap
 | `PATCH /Users/{id}` set `active=true` | `POST /api/admin/users/{id}/enable` |
 | `DELETE /Users/{id}` | `POST /api/admin/users/{id}/disable` (see below) |
 
-`DELETE` is deliberately not a delete. Worth knowing when Entra actually sends it: the documented default for
-an unassigned, out-of-scope or blocked user is a soft delete via `PATCH active=false`, while `DELETE` is
-reserved mainly for a user *permanently* removed from the directory, either 30 days after a soft delete or on a
-manual permanent delete ([Microsoft Learn](https://learn.microsoft.com/entra/identity/app-provisioning/how-provisioning-works#deprovisioning)).
-The bridge maps it to the same disable as `active=false`, so no lifecycle event this endpoint receives can
-destroy a Grafana account or its audit trail. That is a departure from a literal reading of RFC 7644 and it
-means a disabled Grafana account can outlive the Entra identity it came from; the reasoning and the cost are in
-[ADR 0001](adr/0001-soft-delete-over-hard-delete.md).
+**`DELETE` is deliberately not a delete.** Entra's documented default for an unassigned, out-of-scope or
+blocked user is a soft delete via `PATCH active=false`; `DELETE` is reserved mainly for a user
+*permanently* removed from the directory, either 30 days after a soft delete or on a manual permanent
+delete ([Microsoft Learn](https://learn.microsoft.com/entra/identity/app-provisioning/how-provisioning-works#deprovisioning)).
+The bridge maps it to the same disable, so no lifecycle event this endpoint receives can destroy a
+Grafana account or its audit trail. That departs from a literal reading of RFC 7644 and means a disabled
+account can outlive the Entra identity it came from ([ADR 0001](adr/0001-soft-delete-over-hard-delete.md)).
 
-A related consequence worth stating: the bridge creates accounts but never sets an org role, because
-authorization arrives in the `roles` claim at SSO time. A user provisioned by SCIM who has not yet logged in
-exists in Grafana at the default org role, not at the role their group implies. The account is correct on the
-lifecycle axis and not yet correct on the authorization axis, which is the intended division of labour rather
-than a gap, but it does mean "provisioned" and "authorized" are two different moments.
+**The bridge never sets an org role.** Authorization arrives in the `roles` claim at SSO time, so a user
+provisioned by SCIM who has not yet logged in exists in Grafana at the default org role rather than the
+role their group implies. Correct on the lifecycle axis, not yet on the authorization axis: "provisioned"
+and "authorized" are two different moments.
 
-Bridge security: listens only on the Docker network; Caddy routes only `/scim/*` to it; every request must carry `Authorization: Bearer <SCIM_SECRET_TOKEN>`, checked in constant time before any route runs; its Grafana admin credential lives in `.env`. Worth being clear about what this means: the bridge holds a full Grafana admin credential, so the bearer token is the only thing between the internet and account administration. That is why it is a generated 32-byte value and why burning one during the lab meant regenerating it rather than reusing it.
+**Bridge security.** Listens only on the Docker network, Caddy routes only `/scim/*` to it, and every
+request must carry `Authorization: Bearer <SCIM_SECRET_TOKEN>`, checked in constant time before any
+route runs. Its Grafana admin credential lives in `.env`. Since the bridge holds a full Grafana admin
+credential, that bearer token is the only thing between the internet and account administration, which
+is why it is a generated 32-byte value and why burning one during the lab meant regenerating rather
+than reusing it.
 
 ## Build steps
 
@@ -82,7 +90,7 @@ Bridge security: listens only on the Docker network; Caddy routes only `/scim/*`
 
 **Test Connection** must pass (Entra sends an authenticated `GET /Users` probe).
 
-> **As built:** provisioning could not be enabled on `app-grafana-lab` (enterprise apps auto-created from app registrations don't support custom SCIM provisioning in the portal). A second, provisioning-only non-gallery app `app-grafana-scim` hosts the provisioning engine, with the same three groups assigned - assignment here defines *scope*, no roles involved. SSO and provisioning now live on separate service principals whose assignment lists must be kept aligned. That alignment is manual and nothing enforces it, which is the most significant residual risk the lab carries: see [ADR 0003](adr/0003-separate-provisioning-service-principal.md) and the [risk note](risk-and-limitations.md#drift-between-the-two-service-principals).
+> **As built:** provisioning could not be enabled on `app-grafana-lab`, because enterprise apps auto-created from app registrations do not support custom SCIM provisioning in the portal. A second, provisioning-only non-gallery app `app-grafana-scim` hosts the provisioning engine with the same three groups assigned, where assignment defines *scope* and no roles are involved. SSO and provisioning now live on separate service principals whose assignment lists must be kept aligned by hand, which is the most significant residual risk the lab carries. See [ADR 0003](adr/0003-separate-provisioning-service-principal.md) and the [risk note](risk-and-limitations.md).
 
 ![Creating the provisioning app](img/03-scim/03-create-scim-app.png)
 *Non-gallery enterprise app dedicated to provisioning.*
@@ -146,7 +154,7 @@ The `active` mapping is where deprovisioning semantics live: disabled-in-Entra o
 - Account state converges even for users who never log in.
 - SCIM endpoint: HTTPS-only, bearer-token-authenticated, path-scoped at the proxy, bridge unreachable from the internet except via `/scim/*`.
 
-What this phase does *not* close is written up in the [risk and limitations note](risk-and-limitations.md).
-The two worth carrying away: the assignment lists on the SSO app and the provisioning app can drift with
-nothing to detect it, which reopens the orphaned-account gap through a side door; and a static bearer token
-with no rotation guards an endpoint that holds a Grafana admin credential.
+What this phase does not close is in the [risk and limitations note](risk-and-limitations.md). The two
+that matter: the assignment lists on the SSO app and the provisioning app can drift with nothing to
+detect it, reopening the orphaned-account gap through a side door; and a static bearer token with no
+rotation guards an endpoint that holds a Grafana admin credential.

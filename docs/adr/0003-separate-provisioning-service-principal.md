@@ -5,12 +5,12 @@ Status: accepted. Applies to [Phase 3](../03-scim-provisioning.md).
 ## Context
 
 The plan was one application: `app-grafana-lab`, carrying the OIDC configuration, the app roles, the
-group assignments, and the SCIM provisioning configuration. One object, one assignment list, one place
-to look.
+group assignments and the SCIM provisioning configuration. One object, one assignment list, one place to
+look.
 
 The portal does not allow it. Enterprise applications that Entra auto-creates from an app registration
 do not offer custom SCIM provisioning; the blade is present but disabled. Only gallery and non-gallery
-applications get it. This is a platform behaviour with no setting to flip.
+applications get it, and there is no setting to flip.
 
 ## Decision
 
@@ -20,32 +20,24 @@ provisioning scope rather than any role.
 
 ## Consequences
 
-The model still holds. Assignment is required on the SSO app, and both apps carry the same three
-`grafana-*` groups, so a user who can obtain a token is by definition inside provisioning scope. Access
-and account lifecycle remain coupled, and group membership is still the single control point. Nothing
-about the current configuration is weaker for the split.
+**The model still holds.** Assignment is required on the SSO app and both apps carry the same three
+groups, so a user who can obtain a token is by definition inside provisioning scope. Access and account
+lifecycle remain coupled, and group membership is still the single control point.
 
-What changed is that the coupling is now maintained rather than structural. It holds because two lists
-happen to match, not because anything checks that they do. Adding a fourth group to the SSO app without
-adding it to the provisioning app would decouple the two, and the resulting behaviour would look
-correct: those users sign in, Grafana JIT-creates them, and nothing indicates that they sit outside the
-deprovisioning path. That is a consequence of a change nobody has made, not a live gap, but it is the
-thing to remember before extending the model.
+**The coupling is now maintained rather than structural.** It holds because two lists happen to match,
+not because anything checks that they do. Adding a fourth group to the SSO app without adding it to the
+provisioning app would decouple the two, and the result would look correct: those users sign in, Grafana
+JIT-creates them, and nothing indicates they sit outside the deprovisioning path. That is a consequence
+of a change nobody has made rather than a live gap, but it is what to remember before extending the
+model.
 
 We accepted the split because the alternative was not building Phase 3 at all. It is also a real-world
 pattern rather than a lab artefact, since plenty of production tenants end up with provisioning on a
-separate non-gallery app for the same reason. The known mitigation is to treat the two assignment lists
-as one object stored twice, and to change them together.
+separate non-gallery app for the same reason. The mitigation is to treat the two assignment lists as one
+object stored twice and change them together.
 
 ## When we would revisit
 
 If Grafana became a gallery application in Entra, the split disappears and this decision goes with it.
-Short of that, the improvement available is a Graph query comparing the two assignment lists and
-reporting any difference, which is worth writing before a fourth group ever exists. It is not written.
-
-## When we would revisit
-
-If Grafana became a gallery application in Entra, the whole thing collapses back to one object and this
-decision disappears. Short of that, the improvement available today is a scheduled Graph query that
-compares the two assignment lists and reports any difference, which is a small script and would remove
-the reliance on memory. We have not written it.
+Short of that, the available improvement is a Graph query comparing the two assignment lists and
+reporting any difference, worth writing before a fourth group ever exists. It is not written.
