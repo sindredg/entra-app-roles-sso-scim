@@ -18,21 +18,18 @@ Leave the setting enabled and do not create the `GrafanaAdmin` app role.
 
 ## Consequences
 
-Today this grants nothing. No token can contain `GrafanaAdmin`, because no such app role exists to be
-assigned, so the setting has no effect on any current sign-in. It was turned on while working through
-the mapping between Entra app roles and Grafana's role model, and it documents that the distinction
-exists.
+**Today this grants nothing.** No token can contain `GrafanaAdmin`, because no such app role exists, so
+the setting has no effect on any current sign-in.
 
-The caveat is that this makes the app registration the only thing standing between a token and server
-admin. Creating one app role, which is a routine, low-ceremony change that an Application Administrator
-can make in a couple of clicks, becomes sufficient to grant server admin over SSO. That is a short path
-for the highest privilege in the application, and nothing in the repo currently flags that the second
-half of the control is already in place.
+**The caveat:** it makes the app registration the only thing standing between a token and server admin.
+Creating one app role is a routine change an Application Administrator can make in a couple of clicks,
+and that alone would be sufficient to grant server admin over SSO. A short path for the highest
+privilege in the application, with nothing in the repo flagging that the second half of the control is
+already in place.
 
-The tighter configuration is to set it to `false` and turn it on only alongside creating the role, so
-that the two halves of the decision are made together rather than months apart. We have not changed it,
-because changing a working configuration to make a point is how labs break, and because writing this
-down achieves most of the same thing.
+The tighter configuration is `false`, turned on only alongside creating the role, so both halves of the
+decision are made together rather than months apart. Not changed, on the grounds that altering a working
+configuration to make a point is how labs break, and this record achieves most of the same thing.
 
 ## When we would revisit
 

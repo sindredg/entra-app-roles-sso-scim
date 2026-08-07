@@ -1,10 +1,8 @@
 # 01 - Infrastructure: Grafana with HTTPS on an Azure VM
 
-**Goal:** Grafana OSS running in Docker behind Caddy, serving valid HTTPS at `https://<OUR_GRAFANA_FQDN>`, with local admin login working.
+**Built:** Grafana OSS in Docker behind Caddy, serving valid HTTPS at `https://<OUR_GRAFANA_FQDN>`, with local admin login working. Entra requires HTTPS redirect URIs (except localhost) and the provisioning service requires a publicly reachable SCIM endpoint with a trusted certificate, so everything downstream depends on this.
 
-**Why this matters for the IAM phases:** Entra requires HTTPS redirect URIs (except localhost), and the provisioning service requires a publicly reachable SCIM endpoint with a trusted certificate. Everything downstream depends on this base being solid.
-
-> This document describes the clean path. The detours actually taken while building it (SKU restrictions, an NSG misconfiguration) are recorded in the [lab journal](90-lab-journal.md) and [troubleshooting log](99-troubleshooting.md).
+> The clean path. Detours taken while building it (SKU restrictions, an NSG misconfiguration) are in the [lab journal](90-lab-journal.md) and [troubleshooting log](99-troubleshooting.md).
 
 ## 1. Deploy the VM
 
@@ -35,12 +33,12 @@ Create a VM with the following settings; everything not listed keeps its default
 | Allow-HTTPS | 1010 | Any | `*` | 443 | Users + Entra provisioning service |
 | Allow-HTTP-ACME | 1020 | Any | `*` | 80 | Let's Encrypt HTTP-01 challenge only; Caddy redirects everything else to HTTPS |
 
-> **HTTP and HTTPS source ports are always `*`.** Clients connect *from* random ephemeral ports *to* the service port. Setting a source port silently breaks the rule. It looks correct in the portal and matches nothing. Verified the hard way; see the troubleshooting log. `az network nic list-effective-nsg` shows the merged rules actually in force, which is the ground truth when portal and reality disagree.
+> **Source ports are always `*`.** Clients connect *from* random ephemeral ports *to* the service port, so setting a source port silently breaks the rule: it looks correct in the portal and matches nothing. Verified the hard way, see the troubleshooting log. `az network nic list-effective-nsg` shows the merged rules actually in force, which is the ground truth when portal and reality disagree.
 
 ![Port 22 test with vs. without a source port set](img/01-infra/01-nsg-source-port-test.png)
 *Same rule, before/after: with a source port specified the connection times out; with source `*` it connects.*
 
-Destination is left as as the VMs private IP, the NSG is attached to a single NIC/subnet. Application Security Groups would be the multi-VM production pattern. Outbound stays at Azure defaults (allow all) - the VM legitimately needs 443/80 out for the OIDC token exchange, ACME, and package pulls; restricting egress is production hardening with no teaching value here.
+Destination is left as the VM's private IP, since the NSG is attached to a single NIC and subnet. Application Security Groups would be the multi-VM production pattern. Outbound stays at Azure defaults, because the VM legitimately needs 443 and 80 out for the OIDC token exchange, ACME and package pulls.
 
 Grafana's own port 3000 is never opened. TLS terminates at Caddy and Grafana is reachable only on the Docker network.
 
@@ -61,8 +59,8 @@ sudo docker version
 
 Two deliberate choices over the common quick path:
 
-- **Repository install instead of `curl | sh`** - packages are GPG-verified and version-pinnable; piping a script from the internet into a root shell is neither.
-- **No `docker` group membership** - membership is root-equivalent (`docker run -v /:/host ...`). All Docker commands run via `sudo`, keeping each invocation explicit and logged. Production goes further: humans don't touch the daemon at all; CI/CD or an orchestrator does.
+- **Repository install instead of `curl | sh`.** Packages are GPG-verified and version-pinnable; piping a script from the internet into a root shell is neither.
+- **No `docker` group membership.** Membership is root-equivalent (`docker run -v /:/host ...`), so all Docker commands run via `sudo`. Production goes further and humans do not touch the daemon at all.
 
 ## 3. Deploy Grafana + Caddy
 
@@ -89,7 +87,7 @@ What happens on first start:
 - **Grafana** starts with `GF_SERVER_ROOT_URL=https://<GRAFANA_FQDN>`. This must match the public URL exactly - Grafana derives the OIDC redirect from it, and a mismatch is the most common SSO failure (`AADSTS50011`).
 - Grafana takes ~30 s to become ready; Caddy answers first, so very early requests can return 502. Transient.
 
-**Observation worth recording:** within seconds of certificate issuance, automated scanners begin probing the new hostname (`/.env`, `/wp-config.php`, `/backup.sql`, `/.git/HEAD`, the Grafana API). New certificates are published in public Certificate Transparency logs, and bots watch the feed. Every public HTTPS endpoint is discovered the moment it exists, the concrete argument for deny-by-default assignment and disciplined secret handling in the identity phases.
+**Observed:** within seconds of certificate issuance, automated scanners began probing the new hostname (`/.env`, `/wp-config.php`, `/backup.sql`, `/.git/HEAD`, the Grafana API). New certificates are published in public Certificate Transparency logs and bots watch the feed, so every public HTTPS endpoint is discovered the moment it exists.
 
 ![First HTTPS visit](img/01-infra/02-first-https-visit.png)
 *First visit over HTTPS: Caddy obtained and is serving a valid Let's Encrypt certificate.*

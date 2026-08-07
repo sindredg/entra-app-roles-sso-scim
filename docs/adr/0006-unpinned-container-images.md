@@ -17,20 +17,18 @@ Leave the tags floating.
 
 ## Consequences
 
-The upside is real but small: the lab is torn down and rebuilt between sessions, and a floating tag
-means each rebuild lands on a current Grafana with current fixes without anyone maintaining a version
-number. For a lab that is redeployed more often than it is run, that is convenient.
+**Upside, small:** the lab is torn down and rebuilt between sessions, so a floating tag means each
+rebuild lands on a current Grafana with current fixes without anyone maintaining a version number.
 
-The cost is that someone cloning this in a year gets a different Grafana than the one that was running
-when it was built, and if a future release changes the `[auth.azuread]` settings or the admin API the
-bridge calls, the failure will appear to come from nowhere. The Entra-side evidence is unaffected, since
-the portal screenshots show Entra configuration rather than Grafana internals, but the Grafana-side
-screenshots cannot be tied to a specific version.
+**Cost:** someone cloning this in a year gets a different Grafana than the one that was running when it
+was built, and if a future release changes the `[auth.azuread]` settings or the admin API the bridge
+calls, the failure will appear to come from nowhere. The Entra-side evidence is unaffected, since those
+screenshots show Entra configuration rather than Grafana internals, but the Grafana-side screenshots
+cannot be tied to a specific version.
 
-There is a security argument in both directions and neither is worth overstating. Floating tags pick up
-patches automatically, which is good, and pick up unreviewed changes automatically, which is not.
-Pinning to a digest and updating deliberately is where most production guidance lands, paired with
-automated update proposals rather than manual tracking.
+The security argument runs both ways: floating tags pick up patches automatically, and pick up
+unreviewed changes automatically. Pinning to a digest and updating deliberately is where most production
+guidance lands, paired with automated update proposals rather than manual tracking.
 
 ## When we would revisit
 
