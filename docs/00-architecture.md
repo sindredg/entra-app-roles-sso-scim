@@ -121,18 +121,23 @@ sequenceDiagram
     participant G as Grafana
     participant E as Entra ID
 
-    B->>G: GET https://<GRAFANA_FQDN>/login/azuread
-    G->>B: 302 → /authorize (client_id, redirect_uri, scope=openid profile email,<br/>state, code_challenge)
+    B->>G: GET https://[GRAFANA_FQDN]/login/azuread
+    G->>B: 302 redirect to /authorize (client_id, redirect_uri, scope, state, code_challenge)
     B->>E: /authorize - sign-in, consent
-    E->>B: 302 → /login/azuread?code=...&state=...
+    E->>B: 302 redirect to /login/azuread?code=...&state=...
     B->>G: callback with authorization code
     G->>E: POST /token (code, client_secret, code_verifier)
     E->>G: ID token + access token (JWTs)
-    G->>G: validate signature (JWKS), issuer, audience;<br/>read claims → create/update user, set org role from roles
+    G->>G: validate signature, issuer, audience <br/> read claims to create/update user and set role
     G->>B: Grafana session cookie
+```
+
+Claims Grafana consumes (ID token, `v2.0` issuer):
+
+```jsonc
 {
   "aud": "<CLIENT_ID>",                         // must match the app registration
-  "iss": "[https://login.microsoftonline.com/](https://login.microsoftonline.com/)<TENANT_ID>/v2.0",
+  "iss": "https://login.microsoftonline.com/<TENANT_ID>/v2.0",
   "tid": "<TENANT_ID>",                         // checked against allowed_organizations
   "oid": "<user object id>",                    // stable user identifier
   "name": "Amanda Admin",
@@ -142,7 +147,7 @@ sequenceDiagram
                                                 //    Grafana maps this to its org role
 }
 ```
-
+---
 Four things that follow from this:
 
 - **App roles carry no permissions.** On the Entra side the three roles are labeled strings, and Entra only decides which string enters each user's `roles` claim. What `Admin`, `Editor` and `Viewer` are *allowed to do* is defined and enforced entirely by Grafana's built-in org-role RBAC. That is the standard division of labour: the IdP handles authentication and role assignment, the application handles permission enforcement.
