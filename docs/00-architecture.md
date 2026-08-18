@@ -121,30 +121,30 @@ sequenceDiagram
     participant G as Grafana
     participant E as Entra ID
 
-    B->>G: GET https://<GRAFANA_FQDN>/login/azuread
-    G->>B: 302 → /authorize (client_id, redirect_uri, scope=openid profile email,<br/>state, code_challenge)
-    B->>E: /authorize - sign-in, consent
-    E->>B: 302 → /login/azuread?code=...&state=...
-    B->>G: callback with authorization code
-    G->>E: POST /token (code, client_secret, code_verifier)
-    E->>G: ID token + access token (JWTs)
-    G->>G: validate signature (JWKS), issuer, audience;<br/>read claims → create/update user, set org role from `roles`
-    G->>B: Grafana session cookie
+    B->>G: "GET https://<GRAFANA_FQDN>/login/azuread"
+    G->>B: "302 → /authorize (client_id, redirect_uri, scope=openid profile email,<br/>state, code_challenge)"
+    B->>E: "/authorize - sign-in, consent"
+    E->>B: "302 → /login/azuread?code=...&state=..."
+    B->>G: "callback with authorization code"
+    G->>E: "POST /token (code, client_secret, code_verifier)"
+    E->>G: "ID token + access token (JWTs)"
+    G->>G: "validate signature (JWKS), issuer, audience;<br/>read claims → create/update user, set org role from roles"
+    G->>B: "Grafana session cookie"
 ```
 
 Claims Grafana consumes (ID token, `v2.0` issuer):
 
 ```jsonc
 {
-  "aud": "<CLIENT_ID>",                     // must match the app registration
-  "iss": "https://login.microsoftonline.com/<TENANT_ID>/v2.0",
-  "tid": "<TENANT_ID>",                     // checked against allowed_organizations
-  "oid": "<user object id>",                // stable user identifier
+  "aud": "<CLIENT_ID>",                         // must match the app registration
+  "iss": "[https://login.microsoftonline.com/](https://login.microsoftonline.com/)<TENANT_ID>/v2.0",
+  "tid": "<TENANT_ID>",                         // checked against allowed_organizations
+  "oid": "<user object id>",                    // stable user identifier
   "name": "Amanda Admin",
   "preferred_username": "amanda.admin@<TENANT_DOMAIN>",
   "email": "amanda.admin@<TENANT_DOMAIN>",
-  "roles": ["Admin"]                        // ← app role values for this user's assignments;
-                                            //    Grafana maps this to its org role
+  "roles": ["Admin"]                            // ← app role values for this user's assignments;
+                                                //    Grafana maps this to its org role
 }
 ```
 
