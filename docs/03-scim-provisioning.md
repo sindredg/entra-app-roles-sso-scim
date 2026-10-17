@@ -12,7 +12,7 @@ SSO answers "may this person log in *now*?". It does not:
 - update attributes when they change in the directory,
 - **remove or disable the account when access is revoked** - the critical gap. After Phase 2, deleting edvard.editor from the editors group leaves his Grafana account intact forever; it just can't be logged into via SSO. Auditors call that an orphaned account.
 
-*Before-state: `nils.new` has access per Entra (group member, app-assigned) but no account exists in Grafana - nothing happens until first login or SCIM.*
+**Before SCIM:** `nils.new` has access per Entra (group member, app-assigned) but no account exists in Grafana until first login or SCIM provisioning.
 
 SCIM (System for Cross-domain Identity Management) is the standard REST and JSON protocol for this lifecycle plane, specified in [RFC 7643](https://datatracker.ietf.org/doc/html/rfc7643) (schema) and [RFC 7644](https://datatracker.ietf.org/doc/html/rfc7644) (protocol). Entra's provisioning service is the SCIM *client*; the application exposes the SCIM *server* endpoint. Entra implements a specific profile of SCIM 2.0 rather than the whole standard, which is why the bridge only needs to cover a subset ([Microsoft Learn](https://learn.microsoft.com/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)).
 
