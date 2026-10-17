@@ -1,9 +1,12 @@
 # Workforce Identity Lifecycle: Microsoft Entra ID + self-hosted Grafana on Azure IaaS
 
-The workforce identity lifecycle run against a real, self-hosted application. Entra ID is the identity
-provider; Grafana OSS (Docker, behind Caddy for automatic HTTPS, on an Azure VM) is the target.
+> Archived lab record. The environment has been torn down; the implementation and evidence below
+> document historical results.
 
-**All three phases are built and working**, each ending in a test matrix with positive and negative
+The workforce identity lifecycle was tested against a real, self-hosted application. Entra ID was the
+identity provider; Grafana OSS (Docker, behind Caddy for automatic HTTPS, on an Azure VM) was the target.
+
+**All three phases were built and tested**, each ending in a test matrix with positive and negative
 cases and screenshot evidence.
 
 | Phase | Built | Doc |
@@ -87,13 +90,10 @@ and renews Let's Encrypt certificates automatically. The FQDN is baked into the 
 
 ## Conventions
 
-- **No secrets in the repo.** Placeholders everywhere; runtime values live in `.env` on the VM
-  (gitignored, `chmod 600`). Rendered configs and debug output are treated as secret-bearing too, see
+- **Use placeholders for secrets.** Runtime values belong in `.env` on the VM
+  (gitignored, `chmod 600`). Keep credential values out of rendered configs, debug output, and screenshots; see
   [the incident that taught this](docs/99-troubleshooting.md#live-client-secret-rendered-into-shared-output).
 - Entra objects use consistent naming: groups `grafana-<role>`, app registration `app-grafana-lab`,
   provisioning app `app-grafana-scim`.
 - Every phase ends with a test matrix carrying both positive tests (it works) and negative tests
   (it's closed).
-
-> The lab environment may be torn down between sessions, so the documented FQDN will not necessarily
-> be live.
